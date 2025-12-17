@@ -6,7 +6,7 @@ import data_manager
 
 st.set_page_config(page_title="每日A股交易记录", layout="wide")
 
-st.title("📈 每日A股交易记录")
+# st.title("📈 每日A股交易记录")
 
 # --- 导航与路由 ---
 
@@ -15,6 +15,22 @@ def navigate_to(page, **kwargs):
     for key, value in kwargs.items():
         st.query_params[key] = value
     st.rerun()
+
+def inject_global_css():
+    css = """
+    <style>
+    header[data-testid="stAppHeader"] {
+        display: none !important;
+    }
+    header {
+        display: none !important;
+    }
+    .stMainBlockContainer {
+        padding-top: 0 !important;
+    }
+    </style>
+    """
+    st.markdown(css, unsafe_allow_html=True)
 
 def show_create():
     st.header("➕ 新增交易")
@@ -285,8 +301,37 @@ def show_edit(trade_id):
                 st.rerun()
 
 def show_home():
-    if st.button("➕ 新增交易", type="primary"):
-        navigate_to("create")
+    # Floating Action Button (FAB)
+    fab_css = """
+    <style>
+    .fab {
+        position: fixed;
+        bottom: 40px;
+        right: 40px;
+        width: 60px;
+        height: 60px;
+        background-color: #FF4B4B; /* Streamlit Primary Color */
+        color: white !important;
+        border-radius: 50%;
+        text-align: center;
+        line-height: 55px;
+        font-size: 40px;
+        box-shadow: 2px 2px 5px rgba(0,0,0,0.3);
+        z-index: 9999;
+        text-decoration: none !important;
+        transition: transform 0.2s;
+    }
+    .fab:hover, .fab:active, .fab:focus, .fab:visited {
+        transform: scale(1.1);
+        color: white !important;
+        text-decoration: none !important;
+    }
+    </style>
+    """
+    fab_html = '<a href="/?page=create" class="fab" target="_self">+</a>'
+    
+    st.markdown(fab_css, unsafe_allow_html=True)
+    st.markdown(fab_html, unsafe_allow_html=True)
 
     # 加载数据
     df = data_manager.load_data()
@@ -340,8 +385,11 @@ def show_home():
         st.caption("点击表格行以编辑记录")
         
         
+        # 创建用于展示的 DataFrame，将 "名称" 设置为索引以固定列
+        df_display = df.set_index("名称")
+        
         event = st.dataframe(
-            df,
+            df_display,
             use_container_width=True,
             on_select="rerun",
             selection_mode="single-row",
@@ -350,15 +398,17 @@ def show_home():
 
         if event.selection.rows:
             selected_index = event.selection.rows[0]
-            selected_row = df.iloc[selected_index]
+            # 使用显示用的 DataFrame 获取选中行
+            selected_row = df_display.iloc[selected_index]
             trade_id = selected_row["ID"]
             navigate_to("edit", id=trade_id)
-
+        
     else:
         st.info("暂无数据，请点击上方 '➕ 新增交易' 添加记录。")
 
 # --- 主路由 ---
 def main():
+    inject_global_css()
     # 处理查询参数
     params = st.query_params
     page = params.get("page", "home")
@@ -370,9 +420,10 @@ def main():
         if trade_id:
             show_edit(trade_id)
         else:
-            st.error("缺少交易ID")
-            if st.button("返回首页"):
-                navigate_to("home")
+            navigate_to("home")
+            # st.error("缺少交易ID")
+            # if st.button("返回首页"):
+                # navigate_to("home")
     else:
         show_home()
 
