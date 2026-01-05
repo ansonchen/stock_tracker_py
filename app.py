@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-from datetime import date, datetime, time
+from datetime import date, datetime, time, timedelta
 import data_manager
 
 st.set_page_config(page_title="每日A股交易记录", layout="wide")
@@ -41,90 +41,114 @@ def show_create():
             name = data_manager.get_stock_name(code)
             st.session_state.stock_name_add = name
 
+    # Callbacks for dynamic defaults
+    def sync_sell_date():
+        if "create_buy_date" in st.session_state:
+             st.session_state.create_sell_date = st.session_state.create_buy_date + timedelta(days=1)
+
+    def sync_sell_qty():
+        if "create_buy_qty" in st.session_state:
+            st.session_state.create_sell_qty = st.session_state.create_buy_qty
+
     col1, col2 = st.columns(2)
     with col1:
         code = st.text_input("股票代码", key="code_input_add", on_change=update_name_add)
     with col2:
         name = st.text_input("股票名称", key="stock_name_add", disabled=True)
 
-    with st.form("add_trade_form"):
-        col3, col4 = st.columns(2)
-        with col3:
+    # Removed st.form to allow dynamic updates
+    
+    col3, col4 = st.columns(2)
+    with col3:
+        b_date_col, b_time_col = st.columns(2)
+        with b_date_col:
+            buy_date = st.date_input("买入日期", value=date.today(), key="create_buy_date", on_change=sync_sell_date)
+        with b_time_col:
+            buy_time = st.time_input("买入时间", value=time(9, 30), step=60, key="create_buy_time")
+        buy_datetime = datetime.combine(buy_date, buy_time)
+    with col4:
+        buy_price = st.number_input("买入价格", min_value=0.0, format="%.2f", key="create_buy_price")
 
-            b_date_col, b_time_col = st.columns(2)
-            with b_date_col:
-                buy_date = st.date_input("买入日期", value=date.today())
-            with b_time_col:
-                buy_time = st.time_input("买入时间", value=time(9, 30), step=60)
-            buy_datetime = datetime.combine(buy_date, buy_time)
-        with col4:
-            buy_price = st.number_input("买入价格", min_value=0.0, format="%.2f")
+    col5, col6 = st.columns(2)
+    with col5:
+        buy_qty = st.number_input("买入数量", min_value=100, step=100, key="create_buy_qty", on_change=sync_sell_qty)
+    with col6:
+        position = st.multiselect("位置", ["A区", "B区", "股价平台", "前强势能量颈高处", "前异动区区域", "前异动区重要支撑位"], key="create_position")
 
-        col5, col6 = st.columns(2)
-        with col5:
-            buy_qty = st.number_input("买入数量", min_value=100, step=100)
-        with col6:
-            position = st.multiselect("位置", ["A区", "B区", "股价平台", "前强势能量颈高处", "前异动区区域", "前异动区重要支撑位"])
+    col7, col8 = st.columns(2)
+    with col7:
+        strategy = st.multiselect("战法", ["星线", "单日洗盘", "缺口"], key="create_strategy")
+    with col8:
+        operation = st.radio("操作", ["追涨", "低吸"], horizontal=True, key="create_operation")
+    verification = st.radio("两点印证", ["是", "否"], horizontal=True, key="create_verification")
+    
+    st.markdown("---")
+    st.subheader("卖出信息 (可选)")
+    col9, col10 = st.columns(2)
+    
+    # Initialize defaults if not in session state
+    # (Note: widgets using keys will read from session state if present)
+    if "create_sell_date" not in st.session_state:
+        st.session_state.create_sell_date = date.today() + timedelta(days=1)
+    if "create_sell_qty" not in st.session_state:
+         # Default to 100 or whatever logic if needed, but here we just init
+         pass
 
-        col7, col8 = st.columns(2)
-        with col7:
-            strategy = st.multiselect("战法", ["星线", "单日洗盘", "缺口"])
-        with col8:
-            operation = st.radio("操作", ["追涨", "低吸"], horizontal=True)
-        verification = st.radio("两点印证", ["是", "否"], horizontal=True)
-        st.markdown("---")
-        st.subheader("卖出信息 (可选)")
-        col9, col10 = st.columns(2)
-        with col9:
+    with col9:
+        s_date_col, s_time_col = st.columns(2)
+        with s_date_col:
+            sell_date = st.date_input("卖出日期", key="create_sell_date")
+        with s_time_col:
+            sell_time = st.time_input("卖出时间", value=time(9, 30), step=60, key="create_sell_time")
 
-            s_date_col, s_time_col = st.columns(2)
-            with s_date_col:
-                sell_date = st.date_input("卖出日期", value=None)
-            with s_time_col:
-                sell_time = st.time_input("卖出时间", value=time(9, 30), step=60)
+        sell_datetime = None
+        if sell_date:
+            sell_datetime = datetime.combine(sell_date, sell_time) if sell_time else datetime.combine(sell_date, time(0, 0))
+    with col10:
+        sell_price = st.number_input("卖出价格", min_value=0.0, format="%.2f", key="create_sell_price")
+    
+    # Initialize sell qty default if not set (first load logic handled by session state check or logic below)
+    # Using value=buy_qty for first render if key not in state is tricky if buy_qty has its own key.
+    # But since we have sync_sell_qty callback, it handles updates.
+    # For initial render, we can just rely on standard default or check:
+    initial_sell_qty = buy_qty
+    
+    sell_qty = st.number_input("卖出数量", value=initial_sell_qty, min_value=0, step=100, key="create_sell_qty")
 
-            sell_datetime = None
-            if sell_date:
-                sell_datetime = datetime.combine(sell_date, sell_time) if sell_time else datetime.combine(sell_date, time(0, 0))
-        with col10:
-            sell_price = st.number_input("卖出价格", min_value=0.0, format="%.2f")
-        
-        sell_qty = st.number_input("卖出数量", min_value=0, step=100)
+    
+    remarks = st.text_area("备注", key="create_remarks")
 
-        
-        remarks = st.text_area("备注")
+    c1, c2 = st.columns([1, 1])
+    with c1:
+        submitted = st.button("💾 保存记录", type="primary")
+    with c2:
+        cancelled = st.button("❌ 取消")
 
-        c1, c2 = st.columns([1, 1])
-        with c1:
-            submitted = st.form_submit_button("💾 保存记录", type="primary")
-        with c2:
-            cancelled = st.form_submit_button("❌ 取消")
-
-        if submitted:
-            if not code:
-                st.error("请输入股票代码")
-            else:
-                trade_data = {
-                    "代码": code,
-                    "名称": st.session_state.stock_name_add,
-                    "买入日期": buy_datetime,
-                    "买入价格": buy_price,
-                    "买入数量": buy_qty,
-                    "卖出日期": sell_datetime,
-                    "卖出价格": sell_price if sell_price > 0 else None,
-                    "卖出数量": sell_qty if sell_qty > 0 else None,
-                    "位置": ", ".join(position),
-                    "战法": ", ".join(strategy),
-                    "操作": operation,
-                    "两点印证": verification,
-                    "备注": remarks
-                }
-                if data_manager.save_trade(trade_data):
-                    st.success("交易记录已保存!")
-                    navigate_to("home")
-        
-        if cancelled:
-            navigate_to("home")
+    if submitted:
+        if not code:
+            st.error("请输入股票代码")
+        else:
+            trade_data = {
+                "代码": code,
+                "名称": st.session_state.stock_name_add,
+                "买入日期": buy_datetime,
+                "买入价格": buy_price,
+                "买入数量": buy_qty,
+                "卖出日期": sell_datetime,
+                "卖出价格": sell_price if sell_price > 0 else None,
+                "卖出数量": sell_qty if sell_qty > 0 else None,
+                "位置": ", ".join(position),
+                "战法": ", ".join(strategy),
+                "操作": operation,
+                "两点印证": verification,
+                "备注": remarks
+            }
+            if data_manager.save_trade(trade_data):
+                st.success("交易记录已保存!")
+                navigate_to("home")
+    
+    if cancelled:
+        navigate_to("home")
 
 def show_edit(trade_id):
     st.header("📝 编辑交易")
@@ -222,7 +246,7 @@ def show_edit(trade_id):
             val_sell_time = time(9, 30)
 
             if pd.isna(val_sell_date):
-                val_sell_date = date.today()
+                val_sell_date = e_buy_date + timedelta(days=1)
             elif isinstance(val_sell_date, pd.Timestamp):
                 val_sell_time = val_sell_date.time()
                 val_sell_date = val_sell_date.date()
@@ -247,7 +271,8 @@ def show_edit(trade_id):
         with ec10:
             e_sell_price = st.number_input("卖出价格", value=float(selected_row["卖出价格"]) if pd.notna(selected_row["卖出价格"]) else 0.0, min_value=0.0, format="%.2f")
         
-        e_sell_qty = st.number_input("卖出数量", value=int(selected_row["卖出数量"]) if pd.notna(selected_row["卖出数量"]) else 0, min_value=0, step=100)
+        default_sell_qty_val = int(selected_row["卖出数量"]) if pd.notna(selected_row["卖出数量"]) and selected_row["卖出数量"] > 0 else e_buy_qty
+        e_sell_qty = st.number_input("卖出数量", value=default_sell_qty_val, min_value=0, step=100)
 
         
         e_remarks = st.text_area("备注", value=selected_row["备注"] if pd.notna(selected_row["备注"]) else "")
